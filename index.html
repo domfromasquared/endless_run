@@ -59,10 +59,11 @@
   titleImg.src = "assets/titlescreen.png";
   let titleBlinkTimer = 0;
 
-  // --- PLAYER (animated run sprites) ---
+  // --- PLAYER (animated run sprites + jump sprite) ---
   const PLAYER_WIDTH = 80;
   const PLAYER_HEIGHT = 54;
 
+  // Running frames
   const runFrames = [];
   const RUN_FRAME_COUNT = 9;
   for (let i = 1; i <= RUN_FRAME_COUNT; i++) {
@@ -70,6 +71,10 @@
     img.src = `assets/run${i}.png`;
     runFrames.push(img);
   }
+
+  // Jump frame
+  const jumpImg = new Image();
+  jumpImg.src = "assets/jump1.png";
 
   let runFrameIndex = 0;
   let runFrameTimer = 0;
@@ -113,9 +118,9 @@
   }
 
   // Game state
-  // "title" → show title screen
+  // "title"   → show title screen
   // "playing" → active game
-  // "gameOver" → after collision
+  // "gameOver"→ final score screen
   let gameState = "title";
   let lastTime = 0;
   let score = 0;
@@ -177,18 +182,18 @@
 
   function handleInput() {
     if (gameState === "title") {
-      // Move from title screen into game
+      // From title → start game
       resetGame();
       return;
     }
 
     if (gameState === "gameOver") {
-      // Restart game from game over
+      // From final score screen → restart
       resetGame();
       return;
     }
 
-    // In-game jump
+    // In-game: jump
     if (player.onGround) {
       player.vy = -player.jumpStrength;
       player.onGround = false;
@@ -211,13 +216,13 @@
 
   function update(dt) {
     if (gameState === "title") {
-      // Simple blink timer for "Press Start" text
+      // blink timer for "Press Start" on title
       titleBlinkTimer += dt;
       return;
     }
 
     if (gameState !== "playing") {
-      // No updates while game over (frozen frame)
+      // gameOver → freeze world, just draw final screen
       return;
     }
 
@@ -238,13 +243,17 @@
       player.y = GROUND_Y - player.height;
       player.vy = 0;
       player.onGround = true;
+    } else {
+      player.onGround = false;
     }
 
-    // Running animation
-    runFrameTimer += dt;
-    if (runFrameTimer >= RUN_FRAME_DURATION) {
-      runFrameTimer -= RUN_FRAME_DURATION;
-      runFrameIndex = (runFrameIndex + 1) % runFrames.length;
+    // Running animation (only while on ground)
+    if (player.onGround) {
+      runFrameTimer += dt;
+      if (runFrameTimer >= RUN_FRAME_DURATION) {
+        runFrameTimer -= RUN_FRAME_DURATION;
+        runFrameIndex = (runFrameIndex + 1) % runFrames.length;
+      }
     }
 
     // Obstacles
@@ -362,8 +371,32 @@
   }
 
   function drawPlayer() {
-    const currentFrame = runFrames[runFrameIndex];
+    // If in the air: show rotated jump sprite
+    if (!player.onGround) {
+      if (jumpImg.complete && jumpImg.naturalWidth > 0) {
+        ctx.save();
+        const cx = player.x + player.width / 2;
+        const cy = player.y + player.height / 2;
+        ctx.translate(cx, cy);
+        ctx.rotate(-Math.PI / 4); // 45 degrees counterclockwise
+        ctx.drawImage(
+          jumpImg,
+          -player.width / 2,
+          -player.height / 2,
+          player.width,
+          player.height
+        );
+        ctx.restore();
+      } else {
+        // Fallback if jump image not loaded
+        ctx.fillStyle = "#ffeb3b";
+        ctx.fillRect(player.x, player.y, player.width, player.height);
+      }
+      return;
+    }
 
+    // On ground: running animation
+    const currentFrame = runFrames[runFrameIndex];
     if (currentFrame && currentFrame.complete && currentFrame.naturalWidth > 0) {
       ctx.drawImage(
         currentFrame,
@@ -379,6 +412,48 @@
     }
   }
 
+  function drawGameOverScreen() {
+    // Draw frozen background
+    if (bgImg.complete && bgImg.naturalWidth > 0) {
+      ctx.drawImage(bgImg, bgX, 0, BG_WIDTH, BG_HEIGHT);
+      ctx.drawImage(bgImg, bgX + BG_WIDTH, 0, BG_WIDTH, BG_HEIGHT);
+    } else {
+      ctx.fillStyle = "#222";
+      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    }
+
+    // Dark overlay
+    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+    // Final score text
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.font = "32px system-ui, sans-serif";
+    ctx.fillText("GAME OVER", GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40);
+
+    ctx.font = "22px system-ui, sans-serif";
+    ctx.fillText(
+      "Final Score: " + Math.floor(score),
+      GAME_WIDTH / 2,
+      GAME_HEIGHT / 2
+    );
+    ctx.fillText(
+      "Coins Collected: " + coinsCollected,
+      GAME_WIDTH / 2,
+      GAME_HEIGHT / 2 + 32
+    );
+
+    ctx.font = "18px system-ui, sans-serif";
+    ctx.fillText(
+      "Press Space or Click to Restart",
+      GAME_WIDTH / 2,
+      GAME_HEIGHT / 2 + 70
+    );
+  }
+
   function draw() {
     ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
@@ -386,6 +461,13 @@
       drawTitleScreen();
       return;
     }
+
+    if (gameState === "gameOver") {
+      drawGameOverScreen();
+      return;
+    }
+
+    // --- PLAYING STATE RENDER ---
 
     // Background
     if (bgImg.complete && bgImg.naturalWidth > 0) {
@@ -396,9 +478,7 @@
       ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
     }
 
-    // Invisible ground (no draw, only physics)
-
-    // Player (running sprite)
+    // Player
     drawPlayer();
 
     // Obstacles
@@ -421,24 +501,8 @@
       }
     });
 
-    // HUD during play & game over
-    if (gameState === "playing" || gameState === "gameOver") {
-      drawHUD();
-    }
-
-    if (gameState === "gameOver") {
-      ctx.fillStyle = "#fff";
-      ctx.font = "32px system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("GAME OVER", GAME_WIDTH / 2, GAME_HEIGHT / 2 - 10);
-      ctx.font = "18px system-ui, sans-serif";
-      ctx.fillText(
-        "Press Space or Click to Restart",
-        GAME_WIDTH / 2,
-        GAME_HEIGHT / 2 + 20
-      );
-    }
+    // HUD (during play)
+    drawHUD();
   }
 
   function loop(timestamp) {
