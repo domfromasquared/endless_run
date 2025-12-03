@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ugly Runner Game</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: #111;
+      color: #eee;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+      padding-top: 24px;
+    }
+
+    h1 {
+      margin-bottom: 8px;
+      font-size: 1.4rem;
+      text-align: center;
+    }
+
+    p {
+      font-size: 0.9rem;
+      margin-bottom: 12px;
+      text-align: center;
+      opacity: 0.85;
+    }
+
+    canvas {
+      border: 2px solid #444;
+      background: #222;
+      max-width: 100%;
+      image-rendering: pixelated;
+    }
+  </style>
+</head>
+<body>
+  <h1>Ugly Runner</h1>
+  <p>
+    Press <strong>Space</strong> or <strong>Click / Tap</strong> to jump.<br />
+    Avoid the rectangles. Hit one = Game Over.
+  </p>
+
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const GAME_WIDTH = canvas.width;
+    const GAME_HEIGHT = canvas.height;
+
+    // Ground is a strip at the bottom
+    const GROUND_HEIGHT = 60;
+    const GROUND_Y = GAME_HEIGHT - GROUND_HEIGHT;
+
+    // Player properties
+    const player = {
+      x: 80,
+      y: GROUND_Y - 40, // top-left y
+      width: 40,
+      height: 40,
+      vy: 0,
+      jumpStrength: 18, // how strong the jump is
+      onGround: true
+    };
+
+    // Physics
+    const GRAVITY = 60; // pixels per second^2
+
+    // Obstacles
+    let obstacles = [];
+    let obstacleTimer = 0;
+    let obstacleInterval = 1.2; // seconds between spawns (base)
+    const MIN_OBSTACLE_INTERVAL = 0.8; // minimum allowed interval
+
+    // Game
+    let lastTime = 0;
+    let score = 0;
+    let gameState = "playing"; // "playing" | "gameOver"
+    let speedMultiplier = 1;   // increases slowly over time
+
+    function resetGame() {
+      obstacles = [];
+      obstacleTimer = 0;
+      score = 0;
+      speedMultiplier = 1;
+
+      player.x = 80;
+      player.y = GROUND_Y - player.height;
+      player.vy = 0;
+      player.onGround = true;
+
+      gameState = "playing";
+    }
+
+    function spawnObstacle() {
+      // Random size within range
+      const width = 30 + Math.random() * 40;   // 30–70
+      const height = 30 + Math.random() * 50;  // 30–80
+
+      const obstacle = {
+        x: GAME_WIDTH + 20,
+        y: GROUND_Y - height,
+        width: width,
+        height: height,
+        speed: 280 + Math.random() * 80 // base pixels per second
+      };
+
+      obstacles.push(obstacle);
+    }
+
+    function handleJumpOrRestart() {
+      if (gameState === "gameOver") {
+        resetGame();
+        return;
+      }
+
+      if (player.onGround) {
+        player.vy = -player.jumpStrength;
+        player.onGround = false;
+      }
+    }
+
+    // Input: space key
+    window.addEventListener("keydown", (e) => {
+      if (e.code === "Space" || e.key === " ") {
+        e.preventDefault();
+        handleJumpOrRestart();
+      }
+    });
+
+    // Input: mouse / touch
+    canvas.addEventListener("mousedown", () => {
+      handleJumpOrRestart();
+    });
+
+    canvas.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      handleJumpOrRestart();
+    }, { passive: false });
+
+    function update(dt) {
+      if (gameState !== "playing") {
+        return;
+      }
+
+      // Increase difficulty over time
+      speedMultiplier += dt * 0.03; // slowly ramps up
+
+      // Update player physics
+      player.vy += GRAVITY * dt;
+      player.y += player.vy;
+
+      // Ground collision
+      if (player.y + player.height >= GROUND_Y) {
+        player.y = GROUND_Y - player.height;
+        player.vy = 0;
+        player.onGround = true;
+      }
+
+      // Spawn obstacles
+      obstacleTimer += dt;
+      let currentInterval = obstacleInterval / speedMultiplier;
+      if (currentInterval < MIN_OBSTACLE_INTERVAL) {
+        currentInterval = MIN_OBSTACLE_INTERVAL;
+      }
+
+      if (obstacleTimer >= currentInterval) {
+        spawnObstacle();
+        obstacleTimer = 0;
+      }
+
+      // Update obstacles
+      obstacles.forEach((obstacle) => {
+        const speed = obstacle.speed * speedMultiplier;
+        obstacle.x -= speed * dt;
+      });
+
+      // Remove offscreen obstacles
+      obstacles = obstacles.filter((obstacle) => obstacle.x + obstacle.width > 0);
+
+      // Check collisions
+      for (const obstacle of obstacles) {
+        if (isColliding(player, obstacle)) {
+          gameState = "gameOver";
+          break;
+        }
+      }
+
+      // Update score
+      score += dt * 10 * speedMultiplier;
+    }
+
+    function isColliding(a, b) {
+      return (
+        a.x < b.x + b.width &&
+        a.x + a.width > b.x &&
+        a.y < b.y + b.height &&
+        a.y + a.height > b.y
+      );
+    }
+
+    function draw() {
+      // Clear
+      ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+      // Background
+      ctx.fillStyle = "#222";
+      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+      // Ground
+      ctx.fillStyle = "#333";
+      ctx.fillRect(0, GROUND_Y, GAME_WIDTH, GROUND_HEIGHT);
+
+      // Player (bright rectangle)
+      ctx.fillStyle = "#4caf50";
+      ctx.fillRect(player.x, player.y, player.width, player.height);
+
+      // Obstacles (red rectangles)
+      ctx.fillStyle = "#e53935";
+      obstacles.forEach((obstacle) => {
+        ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+      });
+
+      // Score
+      ctx.fillStyle = "#eee";
+      ctx.font = "20px system-ui, sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText("Score: " + Math.floor(score), 16, 32);
+
+      // Game over text
+      if (gameState === "gameOver") {
+        ctx.textAlign = "center";
+        ctx.font = "32px system-ui, sans-serif";
+        ctx.fillText("GAME OVER", GAME_WIDTH / 2, GAME_HEIGHT / 2 - 10);
+        ctx.font = "18px system-ui, sans-serif";
+        ctx.fillText("Press Space or Click to Restart", GAME_WIDTH / 2, GAME_HEIGHT / 2 + 20);
+      }
+    }
+
+    function gameLoop(timestamp) {
+      if (!lastTime) {
+        lastTime = timestamp;
+      }
+      const dt = (timestamp - lastTime) / 1000; // seconds since last frame
+      lastTime = timestamp;
+
+      update(dt);
+      draw();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Start the loop
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
