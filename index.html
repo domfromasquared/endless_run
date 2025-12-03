@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Ugly Runner Game w/ Hurdles & Coin Assets</title>
+  <title>Ugly Runner Game</title>
   <style>
     body {
       background: #111;
@@ -46,6 +46,13 @@
   const GROUND_HEIGHT = 60;
   const GROUND_Y = GAME_HEIGHT - GROUND_HEIGHT;
 
+  // --- Parallax Background (bg.png, 1600×400) ---
+  const BG_WIDTH = 1600;
+  const BG_HEIGHT = 400;
+  const bgImg = new Image();
+  bgImg.src = "assets/bg.png";
+  let bgX = 0;
+
   // Player
   const player = {
     x: 80,
@@ -60,14 +67,14 @@
   const GRAVITY = 60;
 
   // Obstacles (hurdles)
-  const OBSTACLE_WIDTH = 24;      // fixed thin width
-  const OBSTACLE_MIN_HEIGHT = 30; // min height
-  const OBSTACLE_MAX_HEIGHT = 100; // ✅ capped peak height
+  const OBSTACLE_WIDTH = 24;       // fixed thin width
+  const OBSTACLE_MIN_HEIGHT = 30;  // min height
+  const OBSTACLE_MAX_HEIGHT = 100; // max height
   let obstacles = [];
   let obstacleTimer = 0;
   let obstacleInterval = 1.2;
 
-  // Load hurdle image (24x100 in assets)
+  // Hurdle image (24×100, stretched to height)
   const hurdleImg = new Image();
   hurdleImg.src = "assets/hurdle.png";
 
@@ -76,13 +83,13 @@
   let coinTimer = 0;
   let coinInterval = 0.9;
 
-  // Load coin images and assign values 1–5
+  // Coin images & values 1–5
   const coinImages = [];
   const coinValues = [1, 2, 3, 4, 5];
 
   for (let i = 1; i <= 5; i++) {
     const img = new Image();
-    img.src = `assets/coin${i}.png`;
+    img.src = `assets/coin${i}.png`; // coin1.png ... coin5.png
     coinImages.push(img);
   }
 
@@ -107,13 +114,15 @@
     player.vy = 0;
     player.onGround = true;
     gameState = "playing";
+
+    bgX = 0;
   }
 
   function spawnObstacle() {
     const width = OBSTACLE_WIDTH;
     const height =
       OBSTACLE_MIN_HEIGHT +
-      Math.random() * (OBSTACLE_MAX_HEIGHT - OBSTACLE_MIN_HEIGHT); // ✅ 30–100 px
+      Math.random() * (OBSTACLE_MAX_HEIGHT - OBSTACLE_MIN_HEIGHT); // 30–100 px
 
     obstacles.push({
       x: GAME_WIDTH + 20,
@@ -125,10 +134,10 @@
   }
 
   function spawnCoin() {
-    // Pick a random coin index 0–4
+    // Random coin index 0–4
     const index = Math.floor(Math.random() * 5);
     const img = coinImages[index];
-    const value = coinValues[index];
+    const value = coinValues[index]; // 1–5
 
     const size = 32;
     const maxJumpHeightAboveGround = 120;
@@ -156,7 +165,7 @@
   }
 
   // Input
-  document.addEventListener("keydown", e => {
+  document.addEventListener("keydown", (e) => {
     if (e.code === "Space" || e.key === " ") {
       e.preventDefault();
       handleJumpOrRestart();
@@ -164,13 +173,20 @@
   });
 
   canvas.addEventListener("mousedown", handleJumpOrRestart);
-  canvas.addEventListener("touchstart", e => {
+  canvas.addEventListener("touchstart", (e) => {
     e.preventDefault();
     handleJumpOrRestart();
   }, { passive: false });
 
   function update(dt) {
     if (gameState !== "playing") return;
+
+    // --- Background parallax ---
+    // Move slower than obstacles for depth effect
+    bgX -= dt * 60;
+    if (bgX <= -BG_WIDTH) {
+      bgX += BG_WIDTH; // loop seamlessly
+    }
 
     // Speed ramp
     speedMultiplier += dt * 0.03;
@@ -208,18 +224,18 @@
     }
 
     // Move obstacles
-    obstacles.forEach(o => {
+    obstacles.forEach((o) => {
       o.x -= o.speed * dt * speedMultiplier;
     });
 
     // Move coins
-    coins.forEach(c => {
+    coins.forEach((c) => {
       c.x -= c.speed * dt * speedMultiplier;
     });
 
     // Cleanup offscreen
-    obstacles = obstacles.filter(o => o.x + o.width > 0);
-    coins = coins.filter(c => c.x + c.size > 0);
+    obstacles = obstacles.filter((o) => o.x + o.width > 0);
+    coins = coins.filter((c) => c.x + c.size > 0);
 
     // Collisions: obstacles
     for (const o of obstacles) {
@@ -233,13 +249,13 @@
     for (let i = coins.length - 1; i >= 0; i--) {
       const c = coins[i];
       if (rectsCollide(player, { x: c.x, y: c.y, width: c.size, height: c.size })) {
-        score += c.value;
+        score += c.value;  // add coin value
         coinsCollected += 1;
         coins.splice(i, 1);
       }
     }
 
-    // Passive score over time (distance)
+    // Passive score from distance
     score += dt * 10 * speedMultiplier;
   }
 
@@ -253,9 +269,9 @@
   }
 
   function drawHUD() {
-    // HUD fully inside the game frame
     ctx.save();
 
+    // translucent bar at top
     ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
     ctx.fillRect(0, 0, GAME_WIDTH, 40);
 
@@ -274,9 +290,15 @@
   function draw() {
     ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-    // Background
-    ctx.fillStyle = "#222";
-    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    // --- Background (parallax) ---
+    if (bgImg.complete && bgImg.naturalWidth > 0) {
+      ctx.drawImage(bgImg, bgX, 0, BG_WIDTH, BG_HEIGHT);
+      ctx.drawImage(bgImg, bgX + BG_WIDTH, 0, BG_WIDTH, BG_HEIGHT);
+    } else {
+      // Fallback solid color while loading
+      ctx.fillStyle = "#222";
+      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    }
 
     // Ground
     ctx.fillStyle = "#333";
@@ -286,19 +308,18 @@
     ctx.fillStyle = "#4caf50";
     ctx.fillRect(player.x, player.y, player.width, player.height);
 
-    // Obstacles (hurdles using image, stretched to height)
-    obstacles.forEach(o => {
+    // Obstacles (hurdles)
+    obstacles.forEach((o) => {
       if (hurdleImg.complete && hurdleImg.naturalWidth > 0) {
         ctx.drawImage(hurdleImg, o.x, o.y, o.width, o.height);
       } else {
-        // fallback rectangle if image not loaded
         ctx.fillStyle = "#e53935";
         ctx.fillRect(o.x, o.y, o.width, o.height);
       }
     });
 
     // Coins
-    coins.forEach(c => {
+    coins.forEach((c) => {
       if (c.img.complete && c.img.naturalWidth > 0) {
         ctx.drawImage(c.img, c.x, c.y, c.size, c.size);
       } else {
