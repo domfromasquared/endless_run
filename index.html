@@ -2,267 +2,263 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Ugly Runner Game</title>
+  <title>Ugly Runner Game w/ Coin Assets</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
     body {
       background: #111;
       color: #eee;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: flex-start;
-      min-height: 100vh;
-      padding-top: 24px;
-    }
-
-    h1 {
-      margin-bottom: 8px;
-      font-size: 1.4rem;
+      font-family: sans-serif;
       text-align: center;
+      margin: 0;
+      padding-top: 20px;
     }
-
-    p {
-      font-size: 0.9rem;
-      margin-bottom: 12px;
-      text-align: center;
-      opacity: 0.85;
-    }
-
     canvas {
       border: 2px solid #444;
       background: #222;
-      max-width: 100%;
-      image-rendering: pixelated;
+      display: block;
+      margin: auto;
     }
   </style>
 </head>
 <body>
-  <h1>Ugly Runner</h1>
-  <p>
-    Press <strong>Space</strong> or <strong>Click / Tap</strong> to jump.<br />
-    Avoid the rectangles. Hit one = Game Over.
-  </p>
 
-  <canvas id="gameCanvas" width="800" height="400"></canvas>
+<h1>Ugly Runner</h1>
+<p>Press Space or Click to Jump — Collect Coins!</p>
 
-  <script>
-    const canvas = document.getElementById("gameCanvas");
-    const ctx = canvas.getContext("2d");
+<canvas id="gameCanvas" width="800" height="400"></canvas>
 
-    const GAME_WIDTH = canvas.width;
-    const GAME_HEIGHT = canvas.height;
+<script>
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");
 
-    // Ground is a strip at the bottom
-    const GROUND_HEIGHT = 60;
-    const GROUND_Y = GAME_HEIGHT - GROUND_HEIGHT;
+  const GAME_WIDTH = canvas.width;
+  const GAME_HEIGHT = canvas.height;
 
-    // Player properties
-    const player = {
-      x: 80,
-      y: GROUND_Y - 40, // top-left y
-      width: 40,
-      height: 40,
-      vy: 0,
-      jumpStrength: 18, // how strong the jump is
-      onGround: true
-    };
+  const GROUND_HEIGHT = 60;
+  const GROUND_Y = GAME_HEIGHT - GROUND_HEIGHT;
 
-    // Physics
-    const GRAVITY = 60; // pixels per second^2
+  const player = {
+    x: 80,
+    y: GROUND_Y - 40,
+    width: 40,
+    height: 40,
+    vy: 0,
+    jumpStrength: 18,
+    onGround: true
+  };
 
-    // Obstacles
-    let obstacles = [];
-    let obstacleTimer = 0;
-    let obstacleInterval = 1.2; // seconds between spawns (base)
-    const MIN_OBSTACLE_INTERVAL = 0.8; // minimum allowed interval
+  const GRAVITY = 60;
 
-    // Game
-    let lastTime = 0;
-    let score = 0;
-    let gameState = "playing"; // "playing" | "gameOver"
-    let speedMultiplier = 1;   // increases slowly over time
+  // Load 5 coin images & values
+  const coinImages = [];
+  const coinValues = [1, 2, 3, 4, 5];
 
-    function resetGame() {
-      obstacles = [];
-      obstacleTimer = 0;
-      score = 0;
-      speedMultiplier = 1;
+  for (let i = 1; i <= 5; i++) {
+    const img = new Image();
+    img.src = `assets/coin${i}.png`;
+    coinImages.push(img);
+  }
 
-      player.x = 80;
+  let obstacles = [];
+  let coins = [];
+  let obstacleTimer = 0;
+  let obstacleInterval = 1.2;
+
+  let coinTimer = 0;
+  let coinInterval = 0.9;
+
+  let lastTime = 0;
+  let score = 0;
+  let coinsCollected = 0;
+  let gameState = "playing";
+  let speedMultiplier = 1;
+
+  function resetGame() {
+    obstacles = [];
+    coins = [];
+    score = 0;
+    coinsCollected = 0;
+    speedMultiplier = 1;
+
+    player.y = GROUND_Y - player.height;
+    player.vy = 0;
+    player.onGround = true;
+    gameState = "playing";
+  }
+
+  function spawnObstacle() {
+    const width = 30 + Math.random() * 40;
+    const height = 30 + Math.random() * 50;
+
+    obstacles.push({
+      x: GAME_WIDTH + 20,
+      y: GROUND_Y - height,
+      width,
+      height,
+      speed: 280 + Math.random() * 80
+    });
+  }
+
+  function spawnCoin() {
+    // Pick a random coin image and value
+    const index = Math.floor(Math.random() * 5);
+
+    const img = coinImages[index];
+    const value = coinValues[index];
+
+    const size = 32;
+    const y = GROUND_Y - 40 - Math.random() * 100;
+
+    coins.push({
+      x: GAME_WIDTH + 40,
+      y,
+      size,
+      img,
+      value,
+      speed: 280
+    });
+  }
+
+  function handleJumpOrRestart() {
+    if (gameState === "gameOver") {
+      resetGame();
+      return;
+    }
+    if (player.onGround) {
+      player.vy = -player.jumpStrength;
+      player.onGround = false;
+    }
+  }
+
+  document.addEventListener("keydown", e => {
+    if (e.code === "Space") {
+      e.preventDefault();
+      handleJumpOrRestart();
+    }
+  });
+
+  canvas.addEventListener("mousedown", handleJumpOrRestart);
+  canvas.addEventListener("touchstart", e => {
+    e.preventDefault();
+    handleJumpOrRestart();
+  }, { passive: false });
+
+  function update(dt) {
+    if (gameState !== "playing") return;
+
+    speedMultiplier += dt * 0.03;
+
+    player.vy += GRAVITY * dt;
+    player.y += player.vy;
+
+    if (player.y + player.height >= GROUND_Y) {
       player.y = GROUND_Y - player.height;
       player.vy = 0;
       player.onGround = true;
-
-      gameState = "playing";
     }
 
-    function spawnObstacle() {
-      // Random size within range
-      const width = 30 + Math.random() * 40;   // 30–70
-      const height = 30 + Math.random() * 50;  // 30–80
-
-      const obstacle = {
-        x: GAME_WIDTH + 20,
-        y: GROUND_Y - height,
-        width: width,
-        height: height,
-        speed: 280 + Math.random() * 80 // base pixels per second
-      };
-
-      obstacles.push(obstacle);
+    obstacleTimer += dt;
+    if (obstacleTimer >= obstacleInterval / speedMultiplier) {
+      spawnObstacle();
+      obstacleTimer = 0;
     }
 
-    function handleJumpOrRestart() {
-      if (gameState === "gameOver") {
-        resetGame();
-        return;
+    coinTimer += dt;
+    if (coinTimer >= coinInterval / speedMultiplier) {
+      if (Math.random() < 0.65) spawnCoin();
+      coinTimer = 0;
+    }
+
+    obstacles.forEach(o => {
+      o.x -= o.speed * dt * speedMultiplier;
+    });
+
+    coins.forEach(c => {
+      c.x -= c.speed * dt * speedMultiplier;
+    });
+
+    obstacles = obstacles.filter(o => o.x + o.width > 0);
+    coins = coins.filter(c => c.x + c.size > 0);
+
+    for (const o of obstacles) {
+      if (rectsCollide(player, o)) {
+        gameState = "gameOver";
       }
+    }
 
-      if (player.onGround) {
-        player.vy = -player.jumpStrength;
-        player.onGround = false;
+    for (let i = coins.length - 1; i >= 0; i--) {
+      const c = coins[i];
+      if (rectsCollide(player, { x: c.x, y: c.y, width: c.size, height: c.size })) {
+        score += c.value;
+        coinsCollected++;
+        coins.splice(i, 1);
       }
     }
 
-    // Input: space key
-    window.addEventListener("keydown", (e) => {
-      if (e.code === "Space" || e.key === " ") {
-        e.preventDefault();
-        handleJumpOrRestart();
+    score += dt * 10 * speedMultiplier;
+  }
+
+  function rectsCollide(a, b) {
+    return (
+      a.x < b.x + b.width &&
+      a.x + a.width > b.x &&
+      a.y < b.y + b.height &&
+      a.y + a.height > b.y
+    );
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+    ctx.fillStyle = "#222";
+    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+    ctx.fillStyle = "#333";
+    ctx.fillRect(0, GROUND_Y, GAME_WIDTH, GROUND_HEIGHT);
+
+    ctx.fillStyle = "#4caf50";
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+
+    ctx.fillStyle = "#e53935";
+    obstacles.forEach(o => {
+      ctx.fillRect(o.x, o.y, o.width, o.height);
+    });
+
+    coins.forEach(c => {
+      if (c.img.complete && c.img.naturalWidth > 0) {
+        ctx.drawImage(c.img, c.x, c.y, c.size, c.size);
+      } else {
+        ctx.fillStyle = "#ffeb3b";
+        ctx.fillRect(c.x, c.y, c.size, c.size);
       }
     });
 
-    // Input: mouse / touch
-    canvas.addEventListener("mousedown", () => {
-      handleJumpOrRestart();
-    });
+    ctx.fillStyle = "#eee";
+    ctx.font = "20px sans-serif";
+    ctx.fillText("Score: " + Math.floor(score), 16, 32);
+    ctx.fillText("Coins: " + coinsCollected, 16, 58);
 
-    canvas.addEventListener("touchstart", (e) => {
-      e.preventDefault();
-      handleJumpOrRestart();
-    }, { passive: false });
-
-    function update(dt) {
-      if (gameState !== "playing") {
-        return;
-      }
-
-      // Increase difficulty over time
-      speedMultiplier += dt * 0.03; // slowly ramps up
-
-      // Update player physics
-      player.vy += GRAVITY * dt;
-      player.y += player.vy;
-
-      // Ground collision
-      if (player.y + player.height >= GROUND_Y) {
-        player.y = GROUND_Y - player.height;
-        player.vy = 0;
-        player.onGround = true;
-      }
-
-      // Spawn obstacles
-      obstacleTimer += dt;
-      let currentInterval = obstacleInterval / speedMultiplier;
-      if (currentInterval < MIN_OBSTACLE_INTERVAL) {
-        currentInterval = MIN_OBSTACLE_INTERVAL;
-      }
-
-      if (obstacleTimer >= currentInterval) {
-        spawnObstacle();
-        obstacleTimer = 0;
-      }
-
-      // Update obstacles
-      obstacles.forEach((obstacle) => {
-        const speed = obstacle.speed * speedMultiplier;
-        obstacle.x -= speed * dt;
-      });
-
-      // Remove offscreen obstacles
-      obstacles = obstacles.filter((obstacle) => obstacle.x + obstacle.width > 0);
-
-      // Check collisions
-      for (const obstacle of obstacles) {
-        if (isColliding(player, obstacle)) {
-          gameState = "gameOver";
-          break;
-        }
-      }
-
-      // Update score
-      score += dt * 10 * speedMultiplier;
+    if (gameState === "gameOver") {
+      ctx.font = "32px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("GAME OVER", GAME_WIDTH / 2, GAME_HEIGHT / 2);
+      ctx.font = "18px sans-serif";
+      ctx.fillText("Press Space or Click to Restart", GAME_WIDTH / 2, GAME_HEIGHT / 2 + 30);
     }
+  }
 
-    function isColliding(a, b) {
-      return (
-        a.x < b.x + b.width &&
-        a.x + a.width > b.x &&
-        a.y < b.y + b.height &&
-        a.y + a.height > b.y
-      );
-    }
+  function loop(ts) {
+    if (!lastTime) lastTime = ts;
+    const dt = (ts - lastTime) / 1000;
+    lastTime = ts;
 
-    function draw() {
-      // Clear
-      ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    update(dt);
+    draw();
 
-      // Background
-      ctx.fillStyle = "#222";
-      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    requestAnimationFrame(loop);
+  }
 
-      // Ground
-      ctx.fillStyle = "#333";
-      ctx.fillRect(0, GROUND_Y, GAME_WIDTH, GROUND_HEIGHT);
-
-      // Player (bright rectangle)
-      ctx.fillStyle = "#4caf50";
-      ctx.fillRect(player.x, player.y, player.width, player.height);
-
-      // Obstacles (red rectangles)
-      ctx.fillStyle = "#e53935";
-      obstacles.forEach((obstacle) => {
-        ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
-      });
-
-      // Score
-      ctx.fillStyle = "#eee";
-      ctx.font = "20px system-ui, sans-serif";
-      ctx.textAlign = "left";
-      ctx.fillText("Score: " + Math.floor(score), 16, 32);
-
-      // Game over text
-      if (gameState === "gameOver") {
-        ctx.textAlign = "center";
-        ctx.font = "32px system-ui, sans-serif";
-        ctx.fillText("GAME OVER", GAME_WIDTH / 2, GAME_HEIGHT / 2 - 10);
-        ctx.font = "18px system-ui, sans-serif";
-        ctx.fillText("Press Space or Click to Restart", GAME_WIDTH / 2, GAME_HEIGHT / 2 + 20);
-      }
-    }
-
-    function gameLoop(timestamp) {
-      if (!lastTime) {
-        lastTime = timestamp;
-      }
-      const dt = (timestamp - lastTime) / 1000; // seconds since last frame
-      lastTime = timestamp;
-
-      update(dt);
-      draw();
-
-      requestAnimationFrame(gameLoop);
-    }
-
-    // Start the loop
-    requestAnimationFrame(gameLoop);
-  </script>
+  requestAnimationFrame(loop);
+</script>
 </body>
 </html>
