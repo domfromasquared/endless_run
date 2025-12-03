@@ -7,7 +7,7 @@
     body {
       background: #111;
       color: #eee;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: system-ui, sans-serif;
       text-align: center;
       margin: 0;
       padding-top: 20px;
@@ -43,14 +43,17 @@
   const GAME_WIDTH = canvas.width;
   const GAME_HEIGHT = canvas.height;
 
-  const GROUND_HEIGHT = 60;
+  // --- GROUND SETTINGS ---
+  const GROUND_HEIGHT = 20;         // 20px tall ground
   const GROUND_Y = GAME_HEIGHT - GROUND_HEIGHT;
+  const GROUND_VISIBLE = false;     // Invisible ground bar
 
-  // --- Parallax Background (bg.png, 1600×400) ---
+  // --- BACKGROUND (1600×400) ---
   const BG_WIDTH = 1600;
   const BG_HEIGHT = 400;
   const bgImg = new Image();
   bgImg.src = "assets/bg.png";
+
   let bgX = 0;
 
   // Player
@@ -67,14 +70,14 @@
   const GRAVITY = 60;
 
   // Obstacles (hurdles)
-  const OBSTACLE_WIDTH = 24;       // fixed thin width
-  const OBSTACLE_MIN_HEIGHT = 30;  // min height
-  const OBSTACLE_MAX_HEIGHT = 100; // max height
+  const OBSTACLE_WIDTH = 24;
+  const OBSTACLE_MIN_HEIGHT = 30;
+  const OBSTACLE_MAX_HEIGHT = 100;
   let obstacles = [];
   let obstacleTimer = 0;
   let obstacleInterval = 1.2;
 
-  // Hurdle image (24×100, stretched to height)
+  // Hurdle image
   const hurdleImg = new Image();
   hurdleImg.src = "assets/hurdle.png";
 
@@ -83,13 +86,13 @@
   let coinTimer = 0;
   let coinInterval = 0.9;
 
-  // Coin images & values 1–5
+  // Coin images & values
   const coinImages = [];
   const coinValues = [1, 2, 3, 4, 5];
 
   for (let i = 1; i <= 5; i++) {
     const img = new Image();
-    img.src = `assets/coin${i}.png`; // coin1.png ... coin5.png
+    img.src = `assets/coin${i}.png`;
     coinImages.push(img);
   }
 
@@ -97,7 +100,7 @@
   let lastTime = 0;
   let score = 0;
   let coinsCollected = 0;
-  let gameState = "playing"; // "playing" | "gameOver"
+  let gameState = "playing";
   let speedMultiplier = 1;
 
   function resetGame() {
@@ -113,35 +116,32 @@
     player.y = GROUND_Y - player.height;
     player.vy = 0;
     player.onGround = true;
-    gameState = "playing";
 
     bgX = 0;
+    gameState = "playing";
   }
 
   function spawnObstacle() {
-    const width = OBSTACLE_WIDTH;
     const height =
       OBSTACLE_MIN_HEIGHT +
-      Math.random() * (OBSTACLE_MAX_HEIGHT - OBSTACLE_MIN_HEIGHT); // 30–100 px
+      Math.random() * (OBSTACLE_MAX_HEIGHT - OBSTACLE_MIN_HEIGHT);
 
     obstacles.push({
       x: GAME_WIDTH + 20,
       y: GROUND_Y - height,
-      width,
+      width: OBSTACLE_WIDTH,
       height,
       speed: 280 + Math.random() * 80
     });
   }
 
   function spawnCoin() {
-    // Random coin index 0–4
     const index = Math.floor(Math.random() * 5);
     const img = coinImages[index];
-    const value = coinValues[index]; // 1–5
+    const value = coinValues[index];
 
     const size = 32;
-    const maxJumpHeightAboveGround = 120;
-    const y = GROUND_Y - size - (Math.random() * maxJumpHeightAboveGround);
+    const y = GROUND_Y - size - (Math.random() * 120);
 
     coins.push({
       x: GAME_WIDTH + 60,
@@ -158,6 +158,7 @@
       resetGame();
       return;
     }
+
     if (player.onGround) {
       player.vy = -player.jumpStrength;
       player.onGround = false;
@@ -181,11 +182,10 @@
   function update(dt) {
     if (gameState !== "playing") return;
 
-    // --- Background parallax ---
-    // Move slower than obstacles for depth effect
+    // -- Background Parallax --
     bgX -= dt * 60;
     if (bgX <= -BG_WIDTH) {
-      bgX += BG_WIDTH; // loop seamlessly
+      bgX += BG_WIDTH;
     }
 
     // Speed ramp
@@ -195,6 +195,7 @@
     player.vy += GRAVITY * dt;
     player.y += player.vy;
 
+    // Ground collision
     if (player.y + player.height >= GROUND_Y) {
       player.y = GROUND_Y - player.height;
       player.vy = 0;
@@ -233,11 +234,11 @@
       c.x -= c.speed * dt * speedMultiplier;
     });
 
-    // Cleanup offscreen
+    // Cleanup
     obstacles = obstacles.filter((o) => o.x + o.width > 0);
     coins = coins.filter((c) => c.x + c.size > 0);
 
-    // Collisions: obstacles
+    // Obstacle collision
     for (const o of obstacles) {
       if (rectsCollide(player, o)) {
         gameState = "gameOver";
@@ -245,17 +246,16 @@
       }
     }
 
-    // Collisions: coins
+    // Coin collision
     for (let i = coins.length - 1; i >= 0; i--) {
       const c = coins[i];
       if (rectsCollide(player, { x: c.x, y: c.y, width: c.size, height: c.size })) {
-        score += c.value;  // add coin value
-        coinsCollected += 1;
+        score += c.value;
+        coinsCollected++;
         coins.splice(i, 1);
       }
     }
 
-    // Passive score from distance
     score += dt * 10 * speedMultiplier;
   }
 
@@ -271,12 +271,11 @@
   function drawHUD() {
     ctx.save();
 
-    // translucent bar at top
-    ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fillRect(0, 0, GAME_WIDTH, 40);
 
     ctx.fillStyle = "#eee";
-    ctx.font = "16px system-ui, sans-serif";
+    ctx.font = "16px system-ui";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     ctx.fillText("Score: " + Math.floor(score), 12, 20);
@@ -290,56 +289,35 @@
   function draw() {
     ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-    // --- Background (parallax) ---
-    if (bgImg.complete && bgImg.naturalWidth > 0) {
-      ctx.drawImage(bgImg, bgX, 0, BG_WIDTH, BG_HEIGHT);
-      ctx.drawImage(bgImg, bgX + BG_WIDTH, 0, BG_WIDTH, BG_HEIGHT);
-    } else {
-      // Fallback solid color while loading
-      ctx.fillStyle = "#222";
-      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-    }
+    // Background
+    ctx.drawImage(bgImg, bgX, 0, BG_WIDTH, BG_HEIGHT);
+    ctx.drawImage(bgImg, bgX + BG_WIDTH, 0, BG_WIDTH, BG_HEIGHT);
 
-    // Ground
-    ctx.fillStyle = "#333";
-    ctx.fillRect(0, GROUND_Y, GAME_WIDTH, GROUND_HEIGHT);
+    // Invisible ground (no draw)
 
     // Player
     ctx.fillStyle = "#4caf50";
     ctx.fillRect(player.x, player.y, player.width, player.height);
 
-    // Obstacles (hurdles)
+    // Obstacles
     obstacles.forEach((o) => {
-      if (hurdleImg.complete && hurdleImg.naturalWidth > 0) {
-        ctx.drawImage(hurdleImg, o.x, o.y, o.width, o.height);
-      } else {
-        ctx.fillStyle = "#e53935";
-        ctx.fillRect(o.x, o.y, o.width, o.height);
-      }
+      ctx.drawImage(hurdleImg, o.x, o.y, o.width, o.height);
     });
 
     // Coins
     coins.forEach((c) => {
-      if (c.img.complete && c.img.naturalWidth > 0) {
-        ctx.drawImage(c.img, c.x, c.y, c.size, c.size);
-      } else {
-        ctx.fillStyle = "#ffeb3b";
-        ctx.fillRect(c.x, c.y, c.size, c.size);
-      }
+      ctx.drawImage(c.img, c.x, c.y, c.size, c.size);
     });
 
     // HUD
     drawHUD();
 
-    // Game over text
     if (gameState === "gameOver") {
       ctx.fillStyle = "#fff";
-      ctx.font = "32px system-ui, sans-serif";
+      ctx.font = "32px system-ui";
       ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
       ctx.fillText("GAME OVER", GAME_WIDTH / 2, GAME_HEIGHT / 2 - 10);
-
-      ctx.font = "18px system-ui, sans-serif";
+      ctx.font = "18px system-ui";
       ctx.fillText("Press Space or Click to Restart", GAME_WIDTH / 2, GAME_HEIGHT / 2 + 20);
     }
   }
