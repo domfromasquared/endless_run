@@ -44,20 +44,21 @@
   const GAME_HEIGHT = canvas.height;
 
   // --- GROUND SETTINGS ---
-  const GROUND_HEIGHT = 20;                 // 20px tall ground (invisible)
+  const GROUND_HEIGHT = 20;
   const GROUND_Y = GAME_HEIGHT - GROUND_HEIGHT;
 
   // --- BACKGROUND (1600×400) ---
   const BG_WIDTH = 1600;
-  const BG_HEIGHT = 400;
   const bgImg = new Image();
   bgImg.src = "assets/bg.png";
-
   let bgX = 0;
 
-  // --- PLAYER (bigger) ---
-  const PLAYER_WIDTH = 80;   // twice as wide as before
-  const PLAYER_HEIGHT = 54;  // ~1/3 taller than 40px (40 * 4/3 ≈ 53.3)
+  // --- PLAYER SPRITE ---
+  const PLAYER_WIDTH = 80;
+  const PLAYER_HEIGHT = 54;
+
+  const playerImg = new Image();
+  playerImg.src = "assets/player.png";
 
   const player = {
     x: 80,
@@ -65,21 +66,21 @@
     width: PLAYER_WIDTH,
     height: PLAYER_HEIGHT,
     vy: 0,
-    jumpStrength: 20,  // slightly stronger jump to compensate for size
+    jumpStrength: 20,
     onGround: true
   };
 
   const GRAVITY = 60;
 
-  // Obstacles (hurdles)
+  // Obstacles
   const OBSTACLE_WIDTH = 24;
   const OBSTACLE_MIN_HEIGHT = 30;
   const OBSTACLE_MAX_HEIGHT = 100;
+
   let obstacles = [];
   let obstacleTimer = 0;
-  let obstacleInterval = 1.4; // a bit more time between spawns to compensate
+  let obstacleInterval = 1.4;
 
-  // Hurdle image
   const hurdleImg = new Image();
   hurdleImg.src = "assets/hurdle.png";
 
@@ -88,12 +89,11 @@
   let coinTimer = 0;
   let coinInterval = 0.9;
 
-  // Coin images & values
   const coinImages = [];
   const coinValues = [1, 2, 3, 4, 5];
 
   for (let i = 1; i <= 5; i++) {
-    const img = new Image();
+    let img = new Image();
     img.src = `assets/coin${i}.png`;
     coinImages.push(img);
   }
@@ -133,14 +133,14 @@
       y: GROUND_Y - height,
       width: OBSTACLE_WIDTH,
       height,
-      speed: 240 + Math.random() * 60  // slightly slower than before
+      speed: 240 + Math.random() * 60
     });
   }
 
   function spawnCoin() {
-    const index = Math.floor(Math.random() * 5);
-    const img = coinImages[index];
-    const value = coinValues[index];
+    let i = Math.floor(Math.random() * 5);
+    let img = coinImages[i];
+    let value = coinValues[i];
 
     const size = 32;
     const y = GROUND_Y - size - (Math.random() * 120);
@@ -151,7 +151,7 @@
       size,
       img,
       value,
-      speed: 260 // coins scroll a bit slower than hurdles
+      speed: 260
     });
   }
 
@@ -184,20 +184,16 @@
   function update(dt) {
     if (gameState !== "playing") return;
 
-    // -- Background Parallax --
+    // Background parallax
     bgX -= dt * 60;
-    if (bgX <= -BG_WIDTH) {
-      bgX += BG_WIDTH;
-    }
+    if (bgX <= -BG_WIDTH) bgX += BG_WIDTH;
 
-    // Speed ramp (slightly gentler)
     speedMultiplier += dt * 0.025;
 
-    // Player physics
+    // Player gravity
     player.vy += GRAVITY * dt;
     player.y += player.vy;
 
-    // Ground collision
     if (player.y + player.height >= GROUND_Y) {
       player.y = GROUND_Y - player.height;
       player.vy = 0;
@@ -206,51 +202,42 @@
 
     // Obstacles
     obstacleTimer += dt;
-    let currentObstacleInterval = obstacleInterval / speedMultiplier;
-    if (currentObstacleInterval < 0.85) currentObstacleInterval = 0.85;
+    let spawnTime = obstacleInterval / speedMultiplier;
+    if (spawnTime < 0.85) spawnTime = 0.85;
 
-    if (obstacleTimer >= currentObstacleInterval) {
+    if (obstacleTimer >= spawnTime) {
       spawnObstacle();
       obstacleTimer = 0;
     }
 
     // Coins
     coinTimer += dt;
-    let currentCoinInterval = coinInterval / speedMultiplier;
-    if (currentCoinInterval < 0.45) currentCoinInterval = 0.45;
+    let coinTime = coinInterval / speedMultiplier;
+    if (coinTime < 0.45) coinTime = 0.45;
 
-    if (coinTimer >= currentCoinInterval) {
-      if (Math.random() < 0.65) {
-        spawnCoin();
-      }
+    if (coinTimer >= coinTime) {
+      if (Math.random() < 0.65) spawnCoin();
       coinTimer = 0;
     }
 
-    // Move obstacles
-    obstacles.forEach((o) => {
-      o.x -= o.speed * dt * speedMultiplier;
-    });
-
-    // Move coins
-    coins.forEach((c) => {
-      c.x -= c.speed * dt * speedMultiplier;
-    });
+    // Move objects
+    obstacles.forEach(o => o.x -= o.speed * dt * speedMultiplier);
+    coins.forEach(c => c.x -= c.speed * dt * speedMultiplier);
 
     // Cleanup
-    obstacles = obstacles.filter((o) => o.x + o.width > 0);
-    coins = coins.filter((c) => c.x + c.size > 0);
+    obstacles = obstacles.filter(o => o.x + o.width > 0);
+    coins = coins.filter(c => c.x + c.size > 0);
 
-    // Obstacle collision
-    for (const o of obstacles) {
+    // Collisions
+    for (let o of obstacles) {
       if (rectsCollide(player, o)) {
         gameState = "gameOver";
         break;
       }
     }
 
-    // Coin collision
     for (let i = coins.length - 1; i >= 0; i--) {
-      const c = coins[i];
+      let c = coins[i];
       if (rectsCollide(player, { x: c.x, y: c.y, width: c.size, height: c.size })) {
         score += c.value;
         coinsCollected++;
@@ -272,19 +259,14 @@
 
   function drawHUD() {
     ctx.save();
-
     ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fillRect(0, 0, GAME_WIDTH, 40);
-
     ctx.fillStyle = "#eee";
     ctx.font = "16px system-ui";
     ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
     ctx.fillText("Score: " + Math.floor(score), 12, 20);
-
     ctx.textAlign = "right";
     ctx.fillText("Coins: " + coinsCollected, GAME_WIDTH - 12, 20);
-
     ctx.restore();
   }
 
@@ -292,41 +274,27 @@
     ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
     // Background
-    if (bgImg.complete && bgImg.naturalWidth > 0) {
-      ctx.drawImage(bgImg, bgX, 0, BG_WIDTH, BG_HEIGHT);
-      ctx.drawImage(bgImg, bgX + BG_WIDTH, 0, BG_WIDTH, BG_HEIGHT);
+    ctx.drawImage(bgImg, bgX, 0, BG_WIDTH, 400);
+    ctx.drawImage(bgImg, bgX + BG_WIDTH, 0, BG_WIDTH, 400);
+
+    // Player (now sprite)
+    if (playerImg.complete && playerImg.naturalWidth > 0) {
+      ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
     } else {
-      ctx.fillStyle = "#222";
-      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+      ctx.fillStyle = "#4caf50";
+      ctx.fillRect(player.x, player.y, player.width, player.height);
     }
 
-    // Invisible ground (no draw)
-
-    // Player
-    ctx.fillStyle = "#4caf50";
-    ctx.fillRect(player.x, player.y, player.width, player.height);
-
-    // Obstacles (hurdles)
-    obstacles.forEach((o) => {
-      if (hurdleImg.complete && hurdleImg.naturalWidth > 0) {
-        ctx.drawImage(hurdleImg, o.x, o.y, o.width, o.height);
-      } else {
-        ctx.fillStyle = "#e53935";
-        ctx.fillRect(o.x, o.y, o.width, o.height);
-      }
+    // Obstacles
+    obstacles.forEach(o => {
+      ctx.drawImage(hurdleImg, o.x, o.y, o.width, o.height);
     });
 
     // Coins
-    coins.forEach((c) => {
-      if (c.img.complete && c.img.naturalWidth > 0) {
-        ctx.drawImage(c.img, c.x, c.y, c.size, c.size);
-      } else {
-        ctx.fillStyle = "#ffeb3b";
-        ctx.fillRect(c.x, c.y, c.size, c.size);
-      }
+    coins.forEach(c => {
+      ctx.drawImage(c.img, c.x, c.y, c.size, c.size);
     });
 
-    // HUD
     drawHUD();
 
     if (gameState === "gameOver") {
@@ -341,12 +309,10 @@
 
   function loop(ts) {
     if (!lastTime) lastTime = ts;
-    const dt = (ts - lastTime) / 1000;
+    let dt = (ts - lastTime) / 1000;
     lastTime = ts;
-
     update(dt);
     draw();
-
     requestAnimationFrame(loop);
   }
 
